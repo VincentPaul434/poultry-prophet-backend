@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: poultry-prophet-backend
+
+  # Supabase PostgreSQL connection.
+  # Set these via environment variables (recommended) or edit the defaults below.
+  # Supabase -> Project Settings -> Database -> Connection string (use the
+  # "Session pooler" / port 5432 URI for JPA/Hibernate). SSL is required.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres?sslmode=require}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# Application-specific configuration.
+poultry:
+  security:
+    # CHANGE THIS in production. Must be a Base64-encoded secret of at least 256 bits (32 bytes).
+    jwt-secret: ${JWT_SECRET:Y2hhbmdlLW1lLXBvdWx0cnktcHJvcGhldC1zdXBlci1zZWNyZXQta2V5LTEyMzQ1Ng==}
+    jwt-expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24h
+  analytics:
+    # Composite BHI weights (configuration-driven, per SDD 2.1). Normalised internally.
+    weights:
+      temperature: 0.30
+      mortality: 0.35
+      feed: 0.20
+      water: 0.15
+    # Recent window (days) used to compute intake deviations and trends.
+    window-days: 14
+    # Stage target dry-bulb temperatures (deg C). Provisional, per Ross handbook ranges.
+    stage-target-temp:
+      brooding: 33.0
+      growing: 28.0
+      finishing: 24.0
+      conditioning: 22.0
+  report:
+    output-dir: ${REPORT_OUTPUT_DIR:./reports}
+
+logging:
+  level:
+    org.hibernate.SQL: warn

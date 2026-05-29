@@ -15,6 +15,8 @@ public interface DailyRecordRepository extends JpaRepository<DailyRecord, Long> 
 
     List<DailyRecord> findByBatchIdOrderByRecordDateDesc(Long batchId, Pageable pageable);
 
+    List<DailyRecord> findByBatchIdOrderByRecordDateAsc(Long batchId);
+
     List<DailyRecord> findByBatchIdAndRecordDateBetweenOrderByRecordDateAsc(Long batchId,
                                                                             LocalDate start,
                                                                             LocalDate end);

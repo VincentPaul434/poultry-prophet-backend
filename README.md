@@ -35,8 +35,10 @@ $env:JWT_SECRET="<a base64 string of at least 32 bytes>"
 ```
 
 `spring.jpa.hibernate.ddl-auto=update` creates/updates tables automatically on first run.
-On startup a `DataSeeder` inserts the four lifecycle stages and default alert thresholds
-(BHI 60–100, BSI 0–40, WFR 1.5–2.5).
+On startup a `DataSeeder` inserts the game fowl lifecycle stages (`brooding`, `ranging`,
+`pre-conditioning`, `maintenance`, `conditioning`) and default alert thresholds
+(BHI 60–100, BSI 0–40, WFR 1.5–2.5). MVP scope covers brooding + ranging through the
+month-5 selection decision; the later stages are seeded for lifecycle correctness only.
 
 ## Build & run
 
@@ -74,11 +76,18 @@ Send `Authorization: Bearer <token>` on all other requests.
 ### Module 1 — Data Input & Collection
 - `GET  /api/lifecycle-stages` — stage dropdown.
 - `GET  /api/handlers` — handlers on your farm (for assignment).
-- `POST /api/batches` *(MANAGER)* — register a batch (1.3).
+- `POST /api/batches` *(MANAGER)* — register a batch (1.3); accepts `bloodline` and `source` as
+  descriptive Stage-0 metadata (bloodline is collected but **not** used in scoring, Blueprint 5.3).
 - `GET  /api/batches`, `GET /api/batches/{id}`.
-- `POST /api/batches/{id}/records` — record a daily entry (1.1); idempotent per (batch, date).
+- `PATCH /api/batches/{id}/stage` *(MANAGER)* — advance the batch through the lifecycle (e.g. brooding → ranging).
+- `POST /api/batches/{id}/records` — record a daily **brooding** entry (1.1); idempotent per (batch, date).
 - `GET  /api/batches/{id}/records?limit=14` — recent submissions.
 - `POST /api/sync/batch` — sync buffered offline entries with conflict resolution (1.2).
+- `POST /api/batches/{id}/birds` — band an individual bird (Blueprint 5.4); unique band number per batch.
+- `GET  /api/batches/{id}/birds` — list banded birds.
+- `POST /api/batches/{id}/birds/{birdId}/ranging` — weekly per-bird ranging milestone
+  (weight, health event severity, temperament, C/B+/A/A++ rating); idempotent per (bird, date).
+- `GET  /api/batches/{id}/birds/{birdId}/ranging` — that bird's ranging history.
 
 ### Module 2 — Data Processing & Analytics
 - Indicators (BHI/BSI/WFR/readiness) are computed asynchronously after each record write (2.1/2.2).
@@ -87,6 +96,21 @@ Send `Authorization: Bearer <token>` on all other requests.
 - Alerts are generated automatically when an indicator breaches its threshold (2.3).
 - `GET  /api/batches/{id}/alerts?activeOnly=true`.
 - `POST /api/alerts/{id}/acknowledge` *(MANAGER)*.
+
+### Conditioning Readiness Scoring & Month-5 Selection (Blueprint section 6 — the keystone)
+- `GET  /api/batches/{id}/selection` *(MANAGER)* — recomputes scores and returns the **ranked
+  selection view**: birds ordered by Conditioning Readiness Score (CRS) desc, each row exposing
+  its four sub-scores (Brooding Health Index, Growth, Health History, Behavioural) for
+  transparency, plus a suggested advancement cut-line and the system recommendation.
+- `POST /api/batches/{id}/selection/birds/{birdId}` *(MANAGER)* — record the breeder's
+  confirm/override decision (`advance` true/false). An override (decision ≠ recommendation)
+  **requires a `reason`**, recorded as research data.
+
+The engine (`scoring/ScoringService`) is deterministic, transparent and adjustable:
+`CRS = 0.30·BHI + 0.30·Growth + 0.20·HealthHistory + 0.20·Behavioural`. All weights, the
+mortality band, growth penalty, health deductions, expected-weight curve and cut-line are
+**provisional, configuration-driven** starting values under `poultry.scoring.*` in
+`application.yml` — not established facts.
 
 ### Module 3 — Data Output & Visualization
 - `GET  /api/batches/{id}/overview` — dashboard composite payload (3.1).
@@ -99,5 +123,9 @@ Send `Authorization: Bearer <token>` on all other requests.
 
 The BHI/BSI/WFR formulas and severity bands are **provisional** and live in
 `AnalyticsService` (weights in `application.yml` under `poultry.analytics`) and
-`SeverityClassifier`. Thresholds are DB-backed and editable at runtime. These are the
-sections most likely to change once the SRS is approved.
+`SeverityClassifier`. Thresholds are DB-backed and editable at runtime. Likewise the
+Conditioning Readiness scoring formulas live in `ScoringService` with all weights/thresholds
+under `poultry.scoring` (`ScoringProperties`). These are the sections most likely to change
+once the SRS is approved. Per the blueprint's honesty rule, literature-backed thresholds are
+evidence-based while weights and point deductions are documented, adjustable design decisions —
+never presented as established facts.

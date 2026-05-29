@@ -1,6 +1,7 @@
 package com.poultryprophet.batch;
 
 import com.poultryprophet.batch.dto.BatchResponse;
+import com.poultryprophet.batch.dto.ChangeStageRequest;
 import com.poultryprophet.batch.dto.CreateBatchRequest;
 import com.poultryprophet.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,5 +45,13 @@ public class BatchController {
     @GetMapping("/{id}")
     public BatchResponse get(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
         return batchService.getForFarm(id, principal.getFarmId());
+    }
+
+    @PatchMapping("/{id}/stage")
+    @PreAuthorize("hasRole('MANAGER')")
+    public BatchResponse changeStage(@PathVariable Long id,
+                                     @Valid @RequestBody ChangeStageRequest request,
+                                     @AuthenticationPrincipal CustomUserDetails principal) {
+        return batchService.changeStage(id, principal.getFarmId(), request.stageId());
     }
 }

@@ -49,6 +49,8 @@ public class BatchService {
         batch.setInitialPopulation(request.initialPopulation());
         batch.setCurrentPopulation(request.initialPopulation());
         batch.setStartDate(request.startDate());
+        batch.setBloodline(request.bloodline());
+        batch.setSource(request.source());
         batch.setStage(stage);
         batch.setStatus(BatchStatus.ACTIVE);
         batchRepository.save(batch);
@@ -82,6 +84,20 @@ public class BatchService {
     public BatchResponse getForFarm(Long batchId, Long farmId) {
         Batch batch = requireBatch(batchId, farmId);
         return BatchResponse.from(batch, assignmentRepository.findHandlerUserIdsByBatchId(batch.getId()));
+    }
+
+    /**
+     * Advances (or moves) a batch to another lifecycle stage. Needed for the lifecycle
+     * progression brooding -> ranging -> ... required by the selection workflow.
+     */
+    @Transactional
+    public BatchResponse changeStage(Long batchId, Long farmId, Long stageId) {
+        Batch batch = requireBatch(batchId, farmId);
+        LifecycleStage stage = stageRepository.findById(stageId)
+                .orElseThrow(() -> new BadRequestException("Unknown lifecycle stage id " + stageId));
+        batch.setStage(stage);
+        batchRepository.save(batch);
+        return BatchResponse.from(batch, assignmentRepository.findHandlerUserIdsByBatchId(batchId));
     }
 
     /** Shared accessor used by record/analytics/report flows to enforce farm scoping. */

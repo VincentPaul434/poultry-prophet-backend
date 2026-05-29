@@ -19,11 +19,15 @@ public class DataSeeder {
                                                ThresholdConfigRepository thresholdRepository) {
         return args -> {
             if (stageRepository.count() == 0) {
+                // Blueprint game fowl lifecycle. MVP scope covers brooding + ranging through the
+                // month-5 selection decision; pre-conditioning/maintenance/conditioning are seeded
+                // for lifecycle correctness but are Phase 2 functionality.
                 stageRepository.saveAll(List.of(
                         new LifecycleStage("brooding", 0),
-                        new LifecycleStage("growing", 1),
-                        new LifecycleStage("finishing", 2),
-                        new LifecycleStage("conditioning", 3)));
+                        new LifecycleStage("ranging", 1),
+                        new LifecycleStage("pre-conditioning", 2),
+                        new LifecycleStage("maintenance", 3),
+                        new LifecycleStage("conditioning", 4)));
             }
 
             // Global default thresholds (farmId null). Provisional bands per SDD preface.

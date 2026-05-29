@@ -12,6 +12,9 @@ public record CreateBatchRequest(
         @NotNull @Min(1) Integer initialPopulation,
         @NotNull LocalDate startDate,
         @NotNull Long stageId,
+        // Blueprint 5.2/5.3: descriptive metadata. Bloodline is collected but NOT scored.
+        String bloodline,
+        String source,
         List<Long> handlerUserIds
 ) {
 }

@@ -39,6 +39,18 @@ public class Batch {
     @Column(nullable = false)
     private LocalDate startDate;
 
+    /**
+     * Blueprint 5.3: bloodline/breed is collected as descriptive, filterable metadata only.
+     * It is deliberately NOT used in scoring (breed-based scoring cannot be validated without
+     * large cross-breed outcome data). Nullable.
+     */
+    @Column
+    private String bloodline;
+
+    /** Blueprint 5.2 Stage 0: provenance, e.g. "own hatch" vs "purchased". Nullable. */
+    @Column
+    private String source;
+
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "stage_id", nullable = false)
     private LifecycleStage stage;
@@ -101,6 +113,22 @@ public class Batch {
 
     public void setStartDate(LocalDate startDate) {
         this.startDate = startDate;
+    }
+
+    public String getBloodline() {
+        return bloodline;
+    }
+
+    public void setBloodline(String bloodline) {
+        this.bloodline = bloodline;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 
     public LifecycleStage getStage() {

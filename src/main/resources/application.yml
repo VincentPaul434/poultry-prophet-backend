@@ -40,12 +40,47 @@ poultry:
       water: 0.15
     # Recent window (days) used to compute intake deviations and trends.
     window-days: 14
-    # Stage target dry-bulb temperatures (deg C). Provisional, per Ross handbook ranges.
+    # Stage target dry-bulb temperatures (deg C). Provisional, per published poultry ranges.
     stage-target-temp:
       brooding: 33.0
-      growing: 28.0
-      finishing: 24.0
-      conditioning: 22.0
+      ranging: 28.0
+      pre-conditioning: 26.0
+      maintenance: 26.0
+      conditioning: 24.0
+  # Conditioning Readiness scoring (Blueprint section 6). All weights/thresholds are
+  # documented, adjustable starting values - NOT established facts. Normalised internally.
+  scoring:
+    # Composite CRS weights: brooding health + growth lead; health history + behaviour support.
+    crs-weights:
+      brooding-health: 0.30
+      growth: 0.30
+      health-history: 0.20
+      behavioural: 0.20
+    # Brooding Health Index sub-weights (mortality is the strongest literature-backed signal).
+    bhi-weights:
+      mortality: 0.50
+      intake: 0.30
+      temperature: 0.20
+    # Cumulative brooding mortality band: <=1% scores 100, >=5% scores 0, linear between.
+    mortality-best-pct: 1.0
+    mortality-worst-pct: 5.0
+    # Growth: each 1% deviation from the expected weight curve costs this many points.
+    growth-penalty-per-pct: 2.0
+    # Health history deductions per logged event severity (start at 100, subtract).
+    health-deduction:
+      routine: 0.0
+      minor: 5.0
+      moderate: 15.0
+      major: 30.0
+    # Expected ranging weight curve (grams by age in weeks). Provisional game fowl ranges;
+    # linear interpolation between points. Suggested month-5 advancement cut-line on CRS.
+    expected-weight:
+      - { week: 4, grams: 300.0 }
+      - { week: 8, grams: 700.0 }
+      - { week: 12, grams: 1100.0 }
+      - { week: 16, grams: 1500.0 }
+      - { week: 20, grams: 1900.0 }
+    cut-line-crs: 70.0
   report:
     output-dir: ${REPORT_OUTPUT_DIR:./reports}
 

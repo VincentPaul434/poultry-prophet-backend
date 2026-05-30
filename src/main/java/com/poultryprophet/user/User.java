@@ -33,7 +33,7 @@ public class User {
     private Role role;
 
     /** Farm scope. Modelled as a plain id (no Farm entity in modules 1-3 scope). */
-    @Column(nullable = false)
+    @Column(name = "farm_id")
     private Long farmId;
 
     @Column(nullable = false, updatable = false)

@@ -7,20 +7,25 @@ spring:
   # Supabase -> Project Settings -> Database -> Connection string (use the
   # "Session pooler" / port 5432 URI for JPA/Hibernate). SSL is required.
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres?sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres?sslmode=require}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres.vmvfisprlceyhbzjluvk}
+    password: ${SPRING_DATASOURCE_PASSWORD:8vBTlITyft4Sas6m}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
       ddl-auto: update
+    defer-datasource-initialization: true
     properties:
       hibernate:
         format_sql: false
         jdbc:
           time_zone: UTC
     open-in-view: false
+
+  sql:
+    init:
+      mode: always
 
 server:
   port: ${SERVER_PORT:8080}

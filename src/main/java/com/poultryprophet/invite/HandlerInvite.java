@@ -42,6 +42,9 @@ public class HandlerInvite {
     @Column
     private Instant usedAt;
 
+    @Column
+    private Instant declinedAt;
+
     public Long getId() {
         return id;
     }
@@ -104,5 +107,13 @@ public class HandlerInvite {
 
     public void setUsedAt(Instant usedAt) {
         this.usedAt = usedAt;
+    }
+
+    public Instant getDeclinedAt() {
+        return declinedAt;
+    }
+
+    public void setDeclinedAt(Instant declinedAt) {
+        this.declinedAt = declinedAt;
     }
 }

@@ -2,6 +2,7 @@ package com.poultryprophet.record;
 
 import com.poultryprophet.batch.Batch;
 import com.poultryprophet.batch.BatchService;
+import com.poultryprophet.common.BadRequestException;
 import com.poultryprophet.record.dto.CreateRecordRequest;
 import com.poultryprophet.record.dto.DailyRecordResponse;
 import com.poultryprophet.record.event.RecordCreatedEvent;
@@ -63,6 +64,18 @@ public class DailyRecordService {
 
         int previousMortality = record.getId() != null ? record.getMortalityCount() : 0;
 
+        // Net new deaths this save. A negative delta means deaths are being corrected down, which
+        // always increases population — that is valid. A positive delta must not exceed the birds
+        // still alive: you cannot kill more birds than exist.
+        int delta = mortalityCount - previousMortality;
+        if (delta > batch.getCurrentPopulation()) {
+            throw new BadRequestException(
+                    "Cannot record " + mortalityCount + " deaths — only " +
+                    (batch.getCurrentPopulation() + previousMortality) + " bird" +
+                    ((batch.getCurrentPopulation() + previousMortality) == 1 ? "" : "s") +
+                    " total in this batch (" + batch.getCurrentPopulation() + " currently alive)");
+        }
+
         User handler = userRepository.getReferenceById(handlerId);
         record.setBatch(batch);
         record.setHandler(handler);
@@ -75,8 +88,7 @@ public class DailyRecordService {
         record.setSyncStatus(syncStatus);
         record.setUpdatedAt(updatedAt);
 
-        int delta = mortalityCount - previousMortality;
-        batch.setCurrentPopulation(Math.max(0, batch.getCurrentPopulation() - delta));
+        batch.setCurrentPopulation(batch.getCurrentPopulation() - delta);
 
         DailyRecord persisted = recordRepository.save(record);
         events.publishEvent(new RecordCreatedEvent(persisted.getId(), batch.getId()));

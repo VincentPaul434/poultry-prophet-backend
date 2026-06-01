@@ -1,6 +1,7 @@
 package com.poultryprophet.batch;
 
 import com.poultryprophet.batch.dto.BatchResponse;
+import com.poultryprophet.batch.dto.BatchTrackingResponse;
 import com.poultryprophet.batch.dto.ChangeStageRequest;
 import com.poultryprophet.batch.dto.CreateBatchRequest;
 import com.poultryprophet.security.CustomUserDetails;
@@ -30,7 +31,6 @@ public class BatchController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<BatchResponse> create(@Valid @RequestBody CreateBatchRequest request,
                                                 @AuthenticationPrincipal CustomUserDetails principal) {
         BatchResponse response = batchService.create(request, principal.getFarmId());
@@ -45,6 +45,12 @@ public class BatchController {
     @GetMapping("/{id}")
     public BatchResponse get(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
         return batchService.getForFarm(id, principal.getFarmId());
+    }
+
+    @GetMapping("/{id}/tracking")
+    public BatchTrackingResponse getTracking(@PathVariable Long id,
+                                             @AuthenticationPrincipal CustomUserDetails principal) {
+        return batchService.getTracking(id, principal.getFarmId());
     }
 
     @PatchMapping("/{id}/stage")

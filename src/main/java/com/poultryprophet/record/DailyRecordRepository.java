@@ -1,6 +1,7 @@
 package com.poultryprophet.record;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,10 +14,13 @@ public interface DailyRecordRepository extends JpaRepository<DailyRecord, Long> 
 
     Optional<DailyRecord> findByBatchIdAndRecordDate(Long batchId, LocalDate recordDate);
 
+    @EntityGraph(attributePaths = {"handler", "batch"})
     List<DailyRecord> findByBatchIdOrderByRecordDateDesc(Long batchId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"handler", "batch"})
     List<DailyRecord> findByBatchIdOrderByRecordDateAsc(Long batchId);
 
+    @EntityGraph(attributePaths = {"handler", "batch"})
     List<DailyRecord> findByBatchIdAndRecordDateBetweenOrderByRecordDateAsc(Long batchId,
                                                                             LocalDate start,
                                                                             LocalDate end);

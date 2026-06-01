@@ -1,7 +1,9 @@
 package com.poultryprophet.batch;
 
 import com.poultryprophet.batch.dto.BatchResponse;
+import com.poultryprophet.batch.dto.BatchTrackingResponse;
 import com.poultryprophet.batch.dto.CreateBatchRequest;
+import com.poultryprophet.batch.dto.StageTrackerItem;
 import com.poultryprophet.common.BadRequestException;
 import com.poultryprophet.common.NotFoundException;
 import com.poultryprophet.user.Role;
@@ -10,7 +12,10 @@ import com.poultryprophet.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -98,6 +103,29 @@ public class BatchService {
         batch.setStage(stage);
         batchRepository.save(batch);
         return BatchResponse.from(batch, assignmentRepository.findHandlerUserIdsByBatchId(batchId));
+    }
+
+    @Transactional(readOnly = true)
+    public BatchTrackingResponse getTracking(Long batchId, Long farmId) {
+        Batch batch = requireBatch(batchId, farmId);
+        long daysElapsed = Math.max(1, ChronoUnit.DAYS.between(batch.getStartDate(), LocalDate.now()));
+        DevelopmentStage current = DevelopmentStage.fromDaysElapsed(daysElapsed);
+
+        List<DevelopmentStage> tracked = Arrays.asList(
+                DevelopmentStage.BROODING, DevelopmentStage.RANGING, DevelopmentStage.SELECTION);
+
+        List<StageTrackerItem> tracker = tracked.stream().map(stage -> {
+            String status;
+            if (stage.isBefore(current)) status = "COMPLETED";
+            else if (stage == current) status = "ACTIVE";
+            else status = "UPCOMING";
+            return new StageTrackerItem(
+                    stage, stage.getDisplayName(), stage.getStartDay(), stage.getEndDay(), status);
+        }).toList();
+
+        return new BatchTrackingResponse(
+                batch.getId(), batch.getName(), batch.getStartDate(),
+                daysElapsed, current, current.getDisplayName(), tracker);
     }
 
     /** Shared accessor used by record/analytics/report flows to enforce farm scoping. */

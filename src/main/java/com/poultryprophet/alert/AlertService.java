@@ -88,6 +88,16 @@ public class AlertService {
         realtime.publishAlertCreated(saved);
     }
 
+    /** Farm-wide alert feed across every batch — backs the notifications centre. */
+    @Transactional(readOnly = true)
+    public List<AlertResponse> listForFarm(Long farmId, boolean activeOnly, int limit) {
+        PageRequest page = PageRequest.of(0, Math.max(1, limit));
+        List<Alert> alerts = activeOnly
+                ? alertRepository.findByBatch_FarmIdAndAcknowledgedAtIsNullOrderByCreatedAtDesc(farmId, page)
+                : alertRepository.findByBatch_FarmIdOrderByCreatedAtDesc(farmId, page);
+        return alerts.stream().map(AlertResponse::from).toList();
+    }
+
     @Transactional(readOnly = true)
     public List<AlertResponse> list(Long batchId, Long farmId, boolean activeOnly, int limit) {
         batchService.requireBatch(batchId, farmId);

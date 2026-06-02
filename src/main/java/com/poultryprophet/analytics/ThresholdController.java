@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** SDD 2.4: thresholds are DB-backed and editable without code changes. */
 @RestController
@@ -30,9 +32,18 @@ public class ThresholdController {
 
     @GetMapping
     public List<ThresholdResponse> list(@AuthenticationPrincipal CustomUserDetails principal) {
-        return thresholdRepository.findByFarmId(principal.getFarmId()).stream()
-                .map(ThresholdResponse::from)
-                .toList();
+        // Start from the global defaults (farmId null), then let any farm-specific
+        // rows override them per indicator, so every farm sees a full set even
+        // before it has customised anything.
+        Map<String, ThresholdConfig> effective = new LinkedHashMap<>();
+        thresholdRepository.findByFarmIdIsNull()
+                .forEach(t -> effective.put(t.getIndicator(), t));
+        Long farmId = principal.getFarmId();
+        if (farmId != null) {
+            thresholdRepository.findByFarmId(farmId)
+                    .forEach(t -> effective.put(t.getIndicator(), t));
+        }
+        return effective.values().stream().map(ThresholdResponse::from).toList();
     }
 
     @PutMapping("/{id}")
@@ -43,13 +54,30 @@ public class ThresholdController {
         if (request.minValue() > request.maxValue()) {
             throw new BadRequestException("minValue must not exceed maxValue");
         }
+        Long farmId = principal.getFarmId();
+        if (farmId == null) {
+            throw new BadRequestException("You must belong to a farm to edit thresholds");
+        }
         ThresholdConfig threshold = thresholdRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Threshold " + id + " not found"));
-        if (threshold.getFarmId() == null || !threshold.getFarmId().equals(principal.getFarmId())) {
+
+        // A farm-specific row is edited in place. Editing a global default instead
+        // creates (or updates) this farm's own override for that indicator —
+        // copy-on-write — leaving the shared global untouched.
+        ThresholdConfig target;
+        if (farmId.equals(threshold.getFarmId())) {
+            target = threshold;
+        } else if (threshold.getFarmId() == null) {
+            target = thresholdRepository
+                    .findByFarmIdAndIndicator(farmId, threshold.getIndicator())
+                    .orElseGet(() -> new ThresholdConfig(farmId, threshold.getIndicator(),
+                            threshold.getMinValue(), threshold.getMaxValue()));
+        } else {
             throw new BadRequestException("Cannot edit a threshold outside your farm");
         }
-        threshold.setMinValue(request.minValue());
-        threshold.setMaxValue(request.maxValue());
-        return ThresholdResponse.from(thresholdRepository.save(threshold));
+
+        target.setMinValue(request.minValue());
+        target.setMaxValue(request.maxValue());
+        return ThresholdResponse.from(thresholdRepository.save(target));
     }
 }

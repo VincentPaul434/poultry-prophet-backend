@@ -45,8 +45,6 @@ public class BatchService {
         if (batchRepository.existsByFarmIdAndNameIgnoreCase(farmId, request.name())) {
             throw new BadRequestException("A batch named '" + request.name() + "' already exists on this farm");
         }
-        LifecycleStage stage = stageRepository.findById(request.stageId())
-                .orElseThrow(() -> new BadRequestException("Unknown lifecycle stage id " + request.stageId()));
 
         Batch batch = new Batch();
         batch.setFarmId(farmId);
@@ -56,7 +54,10 @@ public class BatchService {
         batch.setStartDate(request.startDate());
         batch.setBloodline(request.bloodline());
         batch.setSource(request.source());
-        batch.setStage(stage);
+        // Stage is auto-derived from age (the start/hatch date drives it); a manager can pin a
+        // manual override later. This also handles registering older birds via a past start date.
+        batch.setStage(autoStageFor(request.startDate()));
+        batch.setStageManual(false);
         batch.setStatus(BatchStatus.ACTIVE);
         batchRepository.save(batch);
 
@@ -73,27 +74,30 @@ public class BatchService {
             assignmentRepository.save(new BatchHandlerAssignment(batch, handler));
         }
 
-        return BatchResponse.from(batch, new ArrayList<>(handlerIds));
+        StageView stageView = resolveStage(batch);
+        return BatchResponse.from(batch, new ArrayList<>(handlerIds), stageView.stage(), stageView.auto());
     }
 
     @Transactional(readOnly = true)
-    public List<BatchResponse> listForFarm(Long farmId) {
+    public List<BatchResponse> listForFarm(Long farmId, boolean archived) {
+        List<Batch> batches = archived
+                ? batchRepository.findByFarmIdAndStatusOrderByCreatedAtDesc(farmId, BatchStatus.ARCHIVED)
+                : batchRepository.findByFarmIdAndStatusNotOrderByCreatedAtDesc(farmId, BatchStatus.ARCHIVED);
         List<BatchResponse> result = new ArrayList<>();
-        for (Batch batch : batchRepository.findByFarmIdOrderByCreatedAtDesc(farmId)) {
-            result.add(BatchResponse.from(batch, assignmentRepository.findHandlerUserIdsByBatchId(batch.getId())));
+        for (Batch batch : batches) {
+            result.add(toResponse(batch));
         }
         return result;
     }
 
     @Transactional(readOnly = true)
     public BatchResponse getForFarm(Long batchId, Long farmId) {
-        Batch batch = requireBatch(batchId, farmId);
-        return BatchResponse.from(batch, assignmentRepository.findHandlerUserIdsByBatchId(batch.getId()));
+        return toResponse(requireBatch(batchId, farmId));
     }
 
     /**
-     * Advances (or moves) a batch to another lifecycle stage. Needed for the lifecycle
-     * progression brooding -> ranging -> ... required by the selection workflow.
+     * Pins a manual stage override, taking the batch off age-based auto-progression until the
+     * manager switches back to Auto. Used to advance/hold a batch out of step with its age.
      */
     @Transactional
     public BatchResponse changeStage(Long batchId, Long farmId, Long stageId) {
@@ -101,8 +105,42 @@ public class BatchService {
         LifecycleStage stage = stageRepository.findById(stageId)
                 .orElseThrow(() -> new BadRequestException("Unknown lifecycle stage id " + stageId));
         batch.setStage(stage);
+        batch.setStageManual(true);
         batchRepository.save(batch);
-        return BatchResponse.from(batch, assignmentRepository.findHandlerUserIdsByBatchId(batchId));
+        return toResponse(batch);
+    }
+
+    /** Clears a manual override so the stage tracks the batch's age again. */
+    @Transactional
+    public BatchResponse useAutoStage(Long batchId, Long farmId) {
+        Batch batch = requireBatch(batchId, farmId);
+        batch.setStageManual(false);
+        batchRepository.save(batch);
+        return toResponse(batch);
+    }
+
+    /** Retires a batch — hides it from the working dashboard list. Reversible via restore. */
+    @Transactional
+    public BatchResponse archive(Long batchId, Long farmId) {
+        Batch batch = requireBatch(batchId, farmId);
+        if (batch.getStatus() == BatchStatus.ARCHIVED) {
+            throw new BadRequestException("Batch " + batchId + " is already archived");
+        }
+        batch.setStatus(BatchStatus.ARCHIVED);
+        batchRepository.save(batch);
+        return toResponse(batch);
+    }
+
+    /** Brings an archived batch back to the working list. */
+    @Transactional
+    public BatchResponse restore(Long batchId, Long farmId) {
+        Batch batch = requireBatch(batchId, farmId);
+        if (batch.getStatus() != BatchStatus.ARCHIVED) {
+            throw new BadRequestException("Batch " + batchId + " is not archived");
+        }
+        batch.setStatus(BatchStatus.ACTIVE);
+        batchRepository.save(batch);
+        return toResponse(batch);
     }
 
     @Transactional(readOnly = true)
@@ -133,5 +171,52 @@ public class BatchService {
     public Batch requireBatch(Long batchId, Long farmId) {
         return batchRepository.findByIdAndFarmId(batchId, farmId)
                 .orElseThrow(() -> new NotFoundException("Batch " + batchId + " not found"));
+    }
+
+    /** The effective stage to display and whether it was derived from age. */
+    public record StageView(LifecycleStage stage, boolean auto) {
+    }
+
+    /**
+     * Resolves the stage shown for a batch: the pinned manual override if set, otherwise the
+     * stage derived from the batch's current age. Shared with the dashboard overview.
+     */
+    public StageView resolveStage(Batch batch) {
+        if (batch.isStageManual()) {
+            return new StageView(batch.getStage(), false);
+        }
+        long days = daysElapsed(batch.getStartDate());
+        LifecycleStage auto = stageRepository.findByNameIgnoreCase(autoStageName(days))
+                .orElse(batch.getStage()); // fall back to the stored stage if the seed is missing
+        return new StageView(auto, true);
+    }
+
+    private BatchResponse toResponse(Batch batch) {
+        StageView stageView = resolveStage(batch);
+        return BatchResponse.from(batch,
+                assignmentRepository.findHandlerUserIdsByBatchId(batch.getId()),
+                stageView.stage(), stageView.auto());
+    }
+
+    /** The lifecycle stage a batch starting on the given date should be in today, by age. */
+    private LifecycleStage autoStageFor(LocalDate startDate) {
+        String name = autoStageName(daysElapsed(startDate));
+        return stageRepository.findByNameIgnoreCase(name)
+                .orElseThrow(() -> new BadRequestException("Lifecycle stage '" + name + "' is not configured"));
+    }
+
+    private static long daysElapsed(LocalDate startDate) {
+        return Math.max(1, ChronoUnit.DAYS.between(startDate, LocalDate.now()));
+    }
+
+    /**
+     * Age band -> lifecycle stage name. Brooding day 1-30 (≈ first month, heat-dependent chick
+     * stage), ranging 31-120 (grow-out), pre-conditioning 121+ (month-5 selection onward).
+     * Provisional bands per the SDD preface — adjustable here without touching callers.
+     */
+    private static String autoStageName(long days) {
+        if (days <= 30) return "brooding";
+        if (days <= 120) return "ranging";
+        return "pre-conditioning";
     }
 }

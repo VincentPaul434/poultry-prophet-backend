@@ -45,8 +45,10 @@ public class OverviewService {
     public BatchOverviewResponse getOverview(Long batchId, Long farmId) {
         Batch batch = batchService.requireBatch(batchId, farmId);
 
+        BatchService.StageView stageView = batchService.resolveStage(batch);
         BatchResponse batchResponse = BatchResponse.from(
-                batch, assignmentRepository.findHandlerUserIdsByBatchId(batchId));
+                batch, assignmentRepository.findHandlerUserIdsByBatchId(batchId),
+                stageView.stage(), stageView.auto());
 
         IndicatorResponse latestIndicator = indicatorRepository
                 .findFirstByBatchIdOrderByComputedAtDesc(batchId)

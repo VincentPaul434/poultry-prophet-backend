@@ -40,6 +40,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+                        // Allow the internal ERROR forward so real 500s surface as 500s
+                        // instead of being masked as a 403 when the chain re-evaluates /error.
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

@@ -55,6 +55,14 @@ public class Batch {
     @JoinColumn(name = "stage_id", nullable = false)
     private LifecycleStage stage;
 
+    /**
+     * When false (default), the batch's lifecycle stage is derived automatically from its age
+     * (see {@code BatchService#resolveStage}). A manager picking a stage explicitly sets this
+     * true, pinning the override until they switch back to "Auto".
+     */
+    @Column(nullable = false)
+    private boolean stageManual = false;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BatchStatus status = BatchStatus.ACTIVE;
@@ -137,6 +145,14 @@ public class Batch {
 
     public void setStage(LifecycleStage stage) {
         this.stage = stage;
+    }
+
+    public boolean isStageManual() {
+        return stageManual;
+    }
+
+    public void setStageManual(boolean stageManual) {
+        this.stageManual = stageManual;
     }
 
     public BatchStatus getStatus() {

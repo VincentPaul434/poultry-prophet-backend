@@ -97,6 +97,16 @@ public class AlertService {
         return alerts.stream().map(AlertResponse::from).toList();
     }
 
+    /** SDD 2.3: farm-wide feed across every batch, backing the notifications centre. */
+    @Transactional(readOnly = true)
+    public List<AlertResponse> listForFarm(Long farmId, boolean activeOnly, int limit) {
+        PageRequest page = PageRequest.of(0, limit);
+        List<Alert> alerts = activeOnly
+                ? alertRepository.findByBatch_FarmIdAndAcknowledgedAtIsNullOrderByCreatedAtDesc(farmId, page)
+                : alertRepository.findByBatch_FarmIdOrderByCreatedAtDesc(farmId, page);
+        return alerts.stream().map(AlertResponse::from).toList();
+    }
+
     @Transactional
     public AlertResponse acknowledge(Long alertId, Long farmId, Long userId, String note) {
         Alert alert = alertRepository.findById(alertId)

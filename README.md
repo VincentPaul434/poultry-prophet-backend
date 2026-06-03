@@ -78,8 +78,11 @@ Send `Authorization: Bearer <token>` on all other requests.
 - `GET  /api/handlers` — handlers on your farm (for assignment).
 - `POST /api/batches` *(MANAGER)* — register a batch (1.3); accepts `bloodline` and `source` as
   descriptive Stage-0 metadata (bloodline is collected but **not** used in scoring, Blueprint 5.3).
-- `GET  /api/batches`, `GET /api/batches/{id}`.
+- `GET  /api/batches?archived=false`, `GET /api/batches/{id}`. `archived=false` (default) returns the
+  working list (everything except retired batches); `archived=true` returns retired batches only.
 - `PATCH /api/batches/{id}/stage` *(MANAGER)* — advance the batch through the lifecycle (e.g. brooding → ranging).
+- `PATCH /api/batches/{id}/archive` *(MANAGER)* — retire a batch (hide from the working list).
+- `PATCH /api/batches/{id}/restore` *(MANAGER)* — bring an archived batch back to the working list.
 - `POST /api/batches/{id}/records` — record a daily **brooding** entry (1.1); idempotent per (batch, date).
 - `GET  /api/batches/{id}/records?limit=14` — recent submissions.
 - `POST /api/sync/batch` — sync buffered offline entries with conflict resolution (1.2).
@@ -95,6 +98,7 @@ Send `Authorization: Bearer <token>` on all other requests.
 - `GET  /api/thresholds`, `PUT /api/thresholds/{id}` *(MANAGER)* — editable thresholds (2.4).
 - Alerts are generated automatically when an indicator breaches its threshold (2.3).
 - `GET  /api/batches/{id}/alerts?activeOnly=true`.
+- `GET  /api/alerts?activeOnly=true&limit=100` — farm-wide feed across every batch (notifications centre).
 - `POST /api/alerts/{id}/acknowledge` *(MANAGER)*.
 
 ### Conditioning Readiness Scoring & Month-5 Selection (Blueprint section 6 — the keystone)

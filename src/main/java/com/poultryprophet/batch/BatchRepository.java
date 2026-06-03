@@ -11,5 +11,11 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     List<Batch> findByFarmIdOrderByCreatedAtDesc(Long farmId);
 
+    // Working dashboard list: everything except retired batches.
+    List<Batch> findByFarmIdAndStatusNotOrderByCreatedAtDesc(Long farmId, BatchStatus status);
+
+    // Retired list: archived batches only.
+    List<Batch> findByFarmIdAndStatusOrderByCreatedAtDesc(Long farmId, BatchStatus status);
+
     Optional<Batch> findByIdAndFarmId(Long id, Long farmId);
 }

@@ -15,4 +15,9 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findByBatchIdOrderByCreatedAtDesc(Long batchId, Pageable pageable);
 
     List<Alert> findByBatchIdAndCreatedAtBetweenOrderByCreatedAtAsc(Long batchId, Instant start, Instant end);
+
+    // Farm-wide feeds for the notifications centre (traverse alert.batch.farmId).
+    List<Alert> findByBatch_FarmIdAndAcknowledgedAtIsNullOrderByCreatedAtDesc(Long farmId, Pageable pageable);
+
+    List<Alert> findByBatch_FarmIdOrderByCreatedAtDesc(Long farmId, Pageable pageable);
 }

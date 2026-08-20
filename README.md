@@ -24,7 +24,9 @@ Spring stack and implements all three modules.
 ## Configure the database (Supabase)
 
 In Supabase: **Project Settings → Database → Connection string**. Use the **Session pooler**
-(port `5432`) URI for JPA/Hibernate. Provide the connection via environment variables:
+(port `5432`) URI for JPA/Hibernate. Provide the connection via environment variables or a
+local, git-ignored `.env` file in the repository root. Spring Boot loads `.env` automatically
+when the application starts.
 
 ```bash
 # PowerShell

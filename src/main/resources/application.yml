@@ -2,6 +2,15 @@ spring:
   application:
     name: poultry-prophet-backend
 
+  # Do not restart the application automatically when DevTools is present.
+  devtools:
+    restart:
+      enabled: false
+
+  # Load local development settings from the git-ignored .env file.
+  config:
+    import: optional:file:.env[.properties]
+
   # Supabase PostgreSQL connection. Set these via environment variables.
   # Supabase -> Project Settings -> Database -> Connection string (use the
   # "Session pooler" / port 5432 URI for JPA/Hibernate). SSL is required.

@@ -150,3 +150,214 @@ under `poultry.scoring` (`ScoringProperties`). These are the sections most likel
 once the SRS is approved. Per the blueprint's honesty rule, literature-backed thresholds are
 evidence-based while weights and point deductions are documented, adjustable design decisions —
 never presented as established facts.
+
+## Intervention implementation guide
+
+The intervention system turns an analytics alert into a trackable operational checklist. It is
+intentionally deterministic and operational: it does not diagnose disease or prescribe
+veterinary treatment.
+
+### End-to-end flow
+
+```text
+DailyRecord write
+    ↓
+IndicatorJobWorker recomputes BHI / BSI / WFR
+    ↓
+AlertService evaluates the indicator against the effective threshold
+    ↓
+Alert is saved and published to /topic/farms/{farmId}/alerts
+    ↓
+InterventionService.createForAlert(alert)
+    ↓
+Intervention is saved once and published to /topic/farms/{farmId}/interventions
+    ↓
+Manager or handler works the checklist and every action is audited
+```
+
+The indicator worker runs asynchronously after the record transaction commits. An alert is
+created only when the value breaches its threshold and there is no existing unacknowledged alert
+of the same type for the batch. `InterventionService.createForAlert` is idempotent by `alert_id`,
+so retrying alert processing does not create duplicate interventions.
+
+### Main implementation files
+
+| Responsibility | File |
+|---|---|
+| Intervention entity and database mapping | `src/main/java/com/poultryprophet/intervention/Intervention.java` |
+| Status values | `src/main/java/com/poultryprophet/intervention/InterventionStatus.java` |
+| Alert-to-checklist rules | `src/main/java/com/poultryprophet/intervention/InterventionRecommendationCatalog.java` |
+| Business rules and authorization checks | `src/main/java/com/poultryprophet/intervention/InterventionService.java` |
+| REST endpoints | `src/main/java/com/poultryprophet/intervention/InterventionController.java` |
+| Immutable action audit trail | `src/main/java/com/poultryprophet/intervention/InterventionHistory.java` |
+| API response/request contracts | `src/main/java/com/poultryprophet/intervention/dto/` |
+| Real-time intervention updates | `src/main/java/com/poultryprophet/realtime/RealtimeNotificationService.java` |
+
+### Checklist catalog
+
+`InterventionRecommendationCatalog` selects a checklist from the alert indicator type:
+
+| Alert type | Default checklist | Critical-alert behavior |
+|---|---|---|
+| `BHI` | Check brooding conditions, ventilation, litter, feed, and water | Tells the handler to notify the manager before high-risk action |
+| `BSI` | Inspect bird behavior and environment | Requires manager review |
+| `WFR` | Inspect drinkers and feeders, then verify readings | Requires manager review |
+| Any other type | Review the affected batch and latest records | Uses the same critical escalation prefix |
+
+To add a new checklist, add a case to `recommend(Alert)` and keep the recommendation focused on
+safe observations and operational checks. Do not add diagnoses, medication, dosage, or treatment
+instructions to this catalog.
+
+### Intervention lifecycle
+
+The supported statuses are:
+
+```text
+PENDING → ACKNOWLEDGED → IN_PROGRESS → COMPLETED
+    │           │              │
+    └───────────┴──────────────┴────────→ ESCALATED
+                                      │
+                                      └─ manager assignment → PENDING
+
+PENDING / ACKNOWLEDGED / IN_PROGRESS / ESCALATED → DISMISSED
+```
+
+Operational rules:
+
+- A handler can claim an unassigned `PENDING` intervention. Claiming assigns it to the handler
+  and changes the status to `ACKNOWLEDGED`.
+- A handler can start an intervention assigned to them from `PENDING` or `ACKNOWLEDGED`.
+- A handler can complete an assigned intervention from `ACKNOWLEDGED` or `IN_PROGRESS`.
+- A handler can escalate an assigned intervention from `ACKNOWLEDGED` or `IN_PROGRESS`; an
+  escalation note is required.
+- A manager can assign or reassign an intervention unless it is terminal or `IN_PROGRESS`.
+- A manager can dismiss any non-terminal intervention; a dismissal reason is required.
+- `COMPLETED` and `DISMISSED` are terminal statuses and cannot be assigned or acted on again.
+- Every successful create, claim, start, complete, escalate, assignment, and dismissal writes an
+  `InterventionHistory` row.
+
+### REST API guide
+
+All requests require `Authorization: Bearer <token>`. IDs below are examples.
+
+List the manager's farm queue or the handler's assigned-batch queue:
+
+```bash
+curl "http://localhost:8080/api/interventions?status=PENDING&limit=100" \
+  -H "Authorization: Bearer <token>"
+```
+
+List interventions for one batch, inspect one intervention, or read its audit history:
+
+```bash
+curl "http://localhost:8080/api/batches/12/interventions" \
+  -H "Authorization: Bearer <token>"
+
+curl "http://localhost:8080/api/interventions/44" \
+  -H "Authorization: Bearer <token>"
+
+curl "http://localhost:8080/api/interventions/44/history" \
+  -H "Authorization: Bearer <token>"
+```
+
+Handler workflow:
+
+```bash
+curl -X POST "http://localhost:8080/api/interventions/44/claim" \
+  -H "Authorization: Bearer <handler-token>"
+
+curl -X POST "http://localhost:8080/api/interventions/44/start" \
+  -H "Authorization: Bearer <handler-token>"
+
+curl -X POST "http://localhost:8080/api/interventions/44/complete" \
+  -H "Authorization: Bearer <handler-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"note":"Checked ventilation and water access; readings returned to normal."}'
+```
+
+Escalate when manager review is needed:
+
+```bash
+curl -X POST "http://localhost:8080/api/interventions/44/escalate" \
+  -H "Authorization: Bearer <handler-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"note":"Mortality continues after environmental checks; manager review required."}'
+```
+
+Manager workflow:
+
+```bash
+curl -X PUT "http://localhost:8080/api/interventions/44/assignment" \
+  -H "Authorization: Bearer <manager-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"handlerUserId":7}'
+
+curl -X POST "http://localhost:8080/api/interventions/44/dismiss" \
+  -H "Authorization: Bearer <manager-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"note":"Reviewed and confirmed the alert was a transient reading."}'
+```
+
+Available endpoints:
+
+| Method | Endpoint | Role |
+|---|---|---|
+| `GET` | `/api/interventions?status=&limit=` | Manager: farm-wide; handler: assigned batches |
+| `GET` | `/api/batches/{batchId}/interventions?status=&limit=` | Manager or assigned handler |
+| `GET` | `/api/interventions/{id}` | Manager or handler in the same batch |
+| `GET` | `/api/interventions/{id}/history` | Manager or handler in the same batch |
+| `POST` | `/api/interventions/{id}/claim` | Handler |
+| `POST` | `/api/interventions/{id}/start` | Handler assigned to intervention |
+| `POST` | `/api/interventions/{id}/complete` | Handler assigned to intervention |
+| `POST` | `/api/interventions/{id}/escalate` | Handler assigned to intervention |
+| `PUT` | `/api/interventions/{id}/assignment` | Manager |
+| `POST` | `/api/interventions/{id}/dismiss` | Manager |
+
+### Frontend integration
+
+The frontend should treat the intervention response as the source of truth and invalidate the
+intervention queue, batch intervention list, and batch overview after each mutation. The most
+important fields are `status`, `managerReviewRequired`, `assignedHandlerId`, `instructions`, and
+`outcomeNote`.
+
+For live updates, connect to `/ws`, authenticate on the STOMP `CONNECT` frame, and subscribe to:
+
+```text
+/topic/farms/{farmId}/interventions
+```
+
+Each message uses the `InterventionEvent` shape:
+
+```json
+{
+  "interventionId": 44,
+  "alertId": 91,
+  "batchId": 12,
+  "indicatorType": "BHI",
+  "severity": "CRITICAL",
+  "title": "Check batch brooding conditions",
+  "status": "PENDING",
+  "assignedHandlerId": null,
+  "occurredAt": "2026-09-06T14:00:00Z"
+}
+```
+
+On receipt, refetch the affected intervention or invalidate the relevant React Query keys. The
+WebSocket event is a notification, not a replacement for the authenticated REST response.
+
+### Testing and extension checklist
+
+When changing the intervention system, verify at least:
+
+1. Each supported indicator type produces the expected checklist.
+2. Reprocessing the same alert returns the existing intervention instead of creating a duplicate.
+3. Managers can see farm interventions while handlers see only assigned-batch interventions.
+4. A handler cannot claim an intervention assigned to another handler or act on an unclaimed one.
+5. Required escalation and dismissal notes reject blank or whitespace-only values.
+6. Invalid status transitions return a conflict response and do not write audit history.
+7. Terminal interventions cannot be reassigned or acted on again.
+8. Every successful state mutation creates the expected immutable history entry and real-time event.
+
+The catalog behavior is covered by
+`src/test/java/com/poultryprophet/intervention/InterventionRecommendationCatalogTest.java`.
+Add service-level tests for any new transition, authorization rule, or checklist branch.

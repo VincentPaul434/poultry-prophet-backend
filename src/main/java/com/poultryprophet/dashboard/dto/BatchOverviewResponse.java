@@ -4,6 +4,7 @@ import com.poultryprophet.alert.dto.AlertResponse;
 import com.poultryprophet.analytics.dto.IndicatorResponse;
 import com.poultryprophet.batch.dto.BatchResponse;
 import com.poultryprophet.record.dto.DailyRecordResponse;
+import com.poultryprophet.intervention.dto.InterventionResponse;
 
 import java.util.List;
 
@@ -12,6 +13,7 @@ public record BatchOverviewResponse(
         BatchResponse batch,
         IndicatorResponse latestIndicator,
         List<DailyRecordResponse> recentRecords,
-        List<AlertResponse> activeAlerts
+        List<AlertResponse> activeAlerts,
+        List<InterventionResponse> activeInterventions
 ) {
 }

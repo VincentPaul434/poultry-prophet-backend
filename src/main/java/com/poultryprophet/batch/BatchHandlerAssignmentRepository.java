@@ -9,6 +9,8 @@ public interface BatchHandlerAssignmentRepository extends JpaRepository<BatchHan
 
     List<BatchHandlerAssignment> findByBatchId(Long batchId);
 
+    List<BatchHandlerAssignment> findByUserId(Long userId);
+
     @Query("select a.user.id from BatchHandlerAssignment a where a.batch.id = :batchId")
     List<Long> findHandlerUserIdsByBatchId(Long batchId);
 

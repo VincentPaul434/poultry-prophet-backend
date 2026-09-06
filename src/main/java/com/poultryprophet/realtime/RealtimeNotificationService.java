@@ -4,6 +4,8 @@ import com.poultryprophet.alert.Alert;
 import com.poultryprophet.alert.dto.AlertEvent;
 import com.poultryprophet.analytics.Indicator;
 import com.poultryprophet.analytics.dto.IndicatorResponse;
+import com.poultryprophet.intervention.Intervention;
+import com.poultryprophet.intervention.dto.InterventionEvent;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -33,5 +35,12 @@ public class RealtimeNotificationService {
         Long farmId = alert.getBatch().getFarmId();
         messagingTemplate.convertAndSend(
                 "/topic/farms/" + farmId + "/alerts", AlertEvent.from(alert));
+    }
+
+    /** Publishes a recommendation when it is created or its handler workflow changes. */
+    public void publishInterventionUpdated(Intervention intervention) {
+        Long farmId = intervention.getBatch().getFarmId();
+        messagingTemplate.convertAndSend(
+                "/topic/farms/" + farmId + "/interventions", InterventionEvent.from(intervention));
     }
 }

@@ -11,6 +11,9 @@ import com.poultryprophet.batch.dto.BatchResponse;
 import com.poultryprophet.dashboard.dto.BatchOverviewResponse;
 import com.poultryprophet.record.DailyRecordRepository;
 import com.poultryprophet.record.dto.DailyRecordResponse;
+import com.poultryprophet.intervention.InterventionRepository;
+import com.poultryprophet.intervention.InterventionStatus;
+import com.poultryprophet.intervention.dto.InterventionResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,17 +31,20 @@ public class OverviewService {
     private final IndicatorRepository indicatorRepository;
     private final DailyRecordRepository recordRepository;
     private final AlertRepository alertRepository;
+    private final InterventionRepository interventionRepository;
 
     public OverviewService(BatchService batchService,
                            BatchHandlerAssignmentRepository assignmentRepository,
                            IndicatorRepository indicatorRepository,
                            DailyRecordRepository recordRepository,
-                           AlertRepository alertRepository) {
+                           AlertRepository alertRepository,
+                           InterventionRepository interventionRepository) {
         this.batchService = batchService;
         this.assignmentRepository = assignmentRepository;
         this.indicatorRepository = indicatorRepository;
         this.recordRepository = recordRepository;
         this.alertRepository = alertRepository;
+        this.interventionRepository = interventionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +71,17 @@ public class OverviewService {
                 .map(AlertResponse::from)
                 .toList();
 
-        return new BatchOverviewResponse(batchResponse, latestIndicator, recentRecords, activeAlerts);
+        List<InterventionResponse> activeInterventions = interventionRepository
+                .findByBatchIdAndStatusInOrderByCreatedAtDesc(batchId, List.of(
+                        InterventionStatus.PENDING,
+                        InterventionStatus.ACKNOWLEDGED,
+                        InterventionStatus.IN_PROGRESS,
+                        InterventionStatus.ESCALATED))
+                .stream()
+                .map(InterventionResponse::from)
+                .toList();
+
+        return new BatchOverviewResponse(
+                batchResponse, latestIndicator, recentRecords, activeAlerts, activeInterventions);
     }
 }

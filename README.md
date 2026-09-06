@@ -98,6 +98,17 @@ Send `Authorization: Bearer <token>` on all other requests.
 - Alerts are generated automatically when an indicator breaches its threshold (2.3).
 - `GET  /api/batches/{id}/alerts?activeOnly=true`.
 - `POST /api/alerts/{id}/acknowledge` *(MANAGER)*.
+- A new alert generates one operational intervention recommendation for the affected batch.
+- `GET  /api/interventions?status=PENDING` — farm-scoped intervention queue. Managers see all
+  interventions; handlers see interventions for their assigned batches.
+- `GET  /api/batches/{id}/interventions` — interventions for one batch.
+- `GET  /api/interventions/{id}/history` — immutable intervention action history.
+- `POST /api/interventions/{id}/claim` *(HANDLER)* — claim an unassigned intervention.
+- `POST /api/interventions/{id}/start` *(HANDLER)* — begin the checklist.
+- `POST /api/interventions/{id}/complete` *(HANDLER)* — complete it with optional outcome notes.
+- `POST /api/interventions/{id}/escalate` *(HANDLER)* — escalate with a required note.
+- `PUT /api/interventions/{id}/assignment` *(MANAGER)* — assign to a handler assigned to the batch.
+- `POST /api/interventions/{id}/dismiss` *(MANAGER)* — close an intervention with a required reason.
 
 ### Conditioning Readiness Scoring & Month-5 Selection (Blueprint section 6 — the keystone)
 - `GET  /api/batches/{id}/selection` *(MANAGER)* — recomputes scores and returns the **ranked
@@ -115,11 +126,19 @@ mortality band, growth penalty, health deductions, expected-weight curve and cut
 `application.yml` — not established facts.
 
 ### Module 3 — Data Output & Visualization
-- `GET  /api/batches/{id}/overview` — dashboard composite payload (3.1).
+- `GET  /api/batches/{id}/overview` — dashboard composite payload (3.1), including active
+  interventions alongside indicators, records, and alerts.
 - `GET  /api/batches/{id}/reports?start=YYYY-MM-DD&end=YYYY-MM-DD` *(MANAGER)* — build report (3.2).
 - `POST /api/reports/{id}/export?format=pdf|csv` *(MANAGER)* — download PDF/CSV.
 - WebSocket: connect to `/ws` (SockJS), send `Authorization: Bearer <token>` on CONNECT,
-  subscribe to `/topic/farms/{farmId}/alerts` and `/topic/farms/{farmId}/indicators` (3.3).
+  subscribe to `/topic/farms/{farmId}/alerts`, `/topic/farms/{farmId}/indicators`, and
+  `/topic/farms/{farmId}/interventions` (3.3).
+
+Interventions are deterministic operational checklists generated from alert type and severity.
+They are not veterinary diagnoses or treatment instructions. Critical recommendations ask the
+handler to notify the manager before any high-risk action. Handler claims, progress updates,
+completion notes, escalations, manager assignments, and dismissals are recorded in intervention
+history.
 
 ## Notes on provisional design (per SDD preface)
 

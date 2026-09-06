@@ -28,7 +28,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // Dashboards subscribe to /topic/farms/{farmId}/{alerts|indicators}.
+        // Dashboards subscribe to /topic/farms/{farmId}/{alerts|indicators|interventions}.
         registry.enableSimpleBroker("/topic");
         registry.setApplicationDestinationPrefixes("/app");
     }

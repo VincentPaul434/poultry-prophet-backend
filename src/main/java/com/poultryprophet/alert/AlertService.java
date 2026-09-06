@@ -8,6 +8,7 @@ import com.poultryprophet.batch.Batch;
 import com.poultryprophet.batch.BatchService;
 import com.poultryprophet.common.NotFoundException;
 import com.poultryprophet.realtime.RealtimeNotificationService;
+import com.poultryprophet.intervention.InterventionService;
 import com.poultryprophet.user.UserRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -29,19 +30,22 @@ public class AlertService {
     private final RealtimeNotificationService realtime;
     private final UserRepository userRepository;
     private final BatchService batchService;
+    private final InterventionService interventionService;
 
     public AlertService(AlertRepository alertRepository,
                         SeverityClassifier severityClassifier,
                         ThresholdConfigRepository thresholdRepository,
                         RealtimeNotificationService realtime,
                         UserRepository userRepository,
-                        BatchService batchService) {
+                        BatchService batchService,
+                        InterventionService interventionService) {
         this.alertRepository = alertRepository;
         this.severityClassifier = severityClassifier;
         this.thresholdRepository = thresholdRepository;
         this.realtime = realtime;
         this.userRepository = userRepository;
         this.batchService = batchService;
+        this.interventionService = interventionService;
     }
 
     /** Invoked by the analytics worker within its transaction after an indicator is saved. */
@@ -86,6 +90,7 @@ public class AlertService {
         alert.setMessage(message);
         Alert saved = alertRepository.save(alert);
         realtime.publishAlertCreated(saved);
+        interventionService.createForAlert(saved);
     }
 
     /** Farm-wide alert feed across every batch — backs the notifications centre. */

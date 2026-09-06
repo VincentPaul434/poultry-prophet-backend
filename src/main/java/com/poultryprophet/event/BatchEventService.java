@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -85,7 +86,8 @@ public class BatchEventService {
         // Propagate to DailyRecord so BHI scoring stays accurate.
         // Only updates an existing record — does not fabricate one with zero vitals.
         if (req.eventType() == EventType.MORTALITY && req.affectedCount() > 0) {
-            recordRepository.findByBatchIdAndRecordDate(batchId, date).ifPresent(record -> {
+            Optional<DailyRecord> dailyRecord = recordRepository.findByBatchIdAndRecordDate(batchId, date);
+            dailyRecord.ifPresent(record -> {
                 int total = eventRepository
                         .findByBatchIdAndEventDateAndEventType(batchId, date, EventType.MORTALITY)
                         .stream().mapToInt(BatchEvent::getAffectedCount).sum();
@@ -96,6 +98,13 @@ public class BatchEventService {
                 batch.setCurrentPopulation(batch.getCurrentPopulation() - delta);
                 publisher.publishEvent(new RecordCreatedEvent(persisted.getId(), batchId));
             });
+
+            // A mortality event is also a valid standalone field log. When there is no
+            // daily-vitals row for the date, the event cannot be propagated to one, but
+            // the deaths must still be reflected in the batch population.
+            if (dailyRecord.isEmpty()) {
+                batch.setCurrentPopulation(batch.getCurrentPopulation() - req.affectedCount());
+            }
         }
 
         String handlerName = userRepository.findById(handlerId)

@@ -3,6 +3,9 @@ package com.poultryprophet.record;
 import com.poultryprophet.batch.Batch;
 import com.poultryprophet.batch.BatchService;
 import com.poultryprophet.common.BadRequestException;
+import com.poultryprophet.event.BatchEvent;
+import com.poultryprophet.event.BatchEventRepository;
+import com.poultryprophet.event.EventType;
 import com.poultryprophet.record.dto.CreateRecordRequest;
 import com.poultryprophet.record.dto.DailyRecordResponse;
 import com.poultryprophet.record.event.RecordCreatedEvent;
@@ -25,15 +28,18 @@ import java.util.List;
 public class DailyRecordService {
 
     private final DailyRecordRepository recordRepository;
+    private final BatchEventRepository eventRepository;
     private final BatchService batchService;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher events;
 
     public DailyRecordService(DailyRecordRepository recordRepository,
+                              BatchEventRepository eventRepository,
                               BatchService batchService,
                               UserRepository userRepository,
                               ApplicationEventPublisher events) {
         this.recordRepository = recordRepository;
+        this.eventRepository = eventRepository;
         this.batchService = batchService;
         this.userRepository = userRepository;
         this.events = events;
@@ -68,6 +74,15 @@ public class DailyRecordService {
         // always increases population — that is valid. A positive delta must not exceed the birds
         // still alive: you cannot kill more birds than exist.
         int delta = mortalityCount - previousMortality;
+        if (record.getId() == null) {
+            // Standalone mortality events are applied to currentPopulation immediately. If the
+            // handler later submits daily vitals for the same date, those event deaths are already
+            // included in the population and must not be deducted a second time.
+            int eventMortality = eventRepository
+                    .findByBatchIdAndEventDateAndEventType(batchId, date, EventType.MORTALITY)
+                    .stream().mapToInt(BatchEvent::getAffectedCount).sum();
+            delta = Math.max(0, mortalityCount - eventMortality);
+        }
         if (delta > batch.getCurrentPopulation()) {
             throw new BadRequestException(
                     "Cannot record " + mortalityCount + " deaths — only " +

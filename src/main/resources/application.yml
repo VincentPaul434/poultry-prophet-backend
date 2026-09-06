@@ -38,6 +38,15 @@ spring:
 server:
   port: ${PORT:${SERVER_PORT:8080}}
 
+# Optional Render self-ping. Set APP_RENDER_URL in the deployed service to
+# keep a free instance warm; leaving it unset disables the scheduler action.
+app:
+  render:
+    url: ${APP_RENDER_URL:}
+  keep-alive:
+    initial-delay-ms: ${APP_KEEP_ALIVE_INITIAL_DELAY_MS:60000}
+    fixed-rate-ms: ${APP_KEEP_ALIVE_FIXED_RATE_MS:600000}
+
 # Application-specific configuration.
 poultry:
   security:
